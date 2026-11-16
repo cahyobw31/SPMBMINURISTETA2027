@@ -319,7 +319,7 @@ footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-al
     <div id="admPanel" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
         <h2>Dashboard Admin</h2>
-        <div style="display:flex;gap:8px"><a class="btn btn-s" id="lnkSheet" target="_blank" style="text-decoration:none">📊 Buka Spreadsheet</a><button class="btn btn-s" onclick="adminLogout()">Keluar</button></div>
+        <div style="display:flex;gap:8px"><a class="btn btn-s" id="lnkSheet" target="_blank" style="text-decoration:none">📊 Buka Spreadsheet</a><button class="btn btn-s" onclick="bukaGantiPw()">🔑 Ganti Password</button><button class="btn btn-s" onclick="adminLogout()">Keluar</button></div>
       </div>
       <div class="stats" id="admStats"></div>
       <div class="sw">
@@ -355,6 +355,19 @@ footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-al
 <footer>© 2026 <span id="ftNama">MI Nurul Islam Tempeh Tengah</span>. Seluruh hak cipta dilindungi.</footer>
 
 <!-- Modal detail -->
+<div class="modal" id="modalPw" onclick="if(event.target===this)tutupGantiPw()">
+  <div class="box" style="max-width:420px">
+    <h3 style="margin-bottom:14px">Ganti Password Admin</h3>
+    <div id="pwErr" class="alert err"></div>
+    <label>Password lama</label>
+    <input type="password" id="pw_lama" autocomplete="current-password">
+    <label style="margin-top:10px;display:block">Password baru (minimal 8 karakter)</label>
+    <input type="password" id="pw_baru" autocomplete="new-password">
+    <label style="margin-top:10px;display:block">Ulangi password baru</label>
+    <input type="password" id="pw_ulang" autocomplete="new-password" onkeydown="if(event.key==='Enter')simpanPw()">
+    <div class="actions" style="margin-top:16px"><button class="btn btn-s" onclick="tutupGantiPw()">Batal</button><button class="btn btn-p" id="btnPw" onclick="simpanPw()">Simpan</button></div>
+  </div>
+</div>
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
   <div class="box">
     <div id="mErr" class="alert err"></div>
@@ -391,14 +404,19 @@ function call(fn, ...args){
       rej(new Error('API_URL belum diisi. Tempel URL Web App Apps Script (berakhiran /exec) di index.html.'));
       return;
     }
+    const ctl = new AbortController(); const tmo = setTimeout(() => ctl.abort(), 240000);
     fetch(API_URL, {
+      signal: ctl.signal,
       method: 'POST',
       headers: {'Content-Type': 'text/plain;charset=utf-8'}, // tanpa preflight CORS
       body: JSON.stringify({fn: fn, args: args})
     })
     .then(r => r.json())
     .then(j => j.ok ? res(j.data) : rej(new Error(j.error || 'Terjadi kesalahan.')))
-    .catch(() => rej(new Error('Tidak dapat terhubung ke server. Periksa koneksi internet lalu coba lagi.')));
+    .catch(e => rej(new Error(e && e.name === 'AbortError'
+      ? 'Server terlalu lama merespons. Data mungkin sudah tersimpan: hubungi panitia sebelum mengirim ulang.'
+      : 'Tidak dapat terhubung ke server. Periksa koneksi internet lalu coba lagi.')))
+    .finally(() => clearTimeout(tmo));
   });
 }
 function showAlert(id, msg){ const el=$(id); el.textContent=msg; el.classList.toggle('show', !!msg); }
@@ -463,16 +481,47 @@ function nextStep(n){
   }
   setStepper(n);
 }
+function kompresGambar(file, maxBytes){
+  return new Promise((res, rej) => {
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let sisi = 1600, q = 0.82, tries = 0;
+      const buat = () => {
+        const sk = Math.min(1, sisi / Math.max(img.width, img.height));
+        const c = document.createElement('canvas'); c.width = Math.round(img.width * sk); c.height = Math.round(img.height * sk);
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+        c.toBlob(b => {
+          if(!b) return rej(new Error('gagal'));
+          if(b.size > maxBytes && tries++ < 6){ q = Math.max(.5, q - .08); sisi = Math.round(sisi * .85); return buat(); }
+          res(b);
+        }, 'image/jpeg', q);
+      };
+      buat();
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('gagal')); };
+    img.src = url;
+  });
+}
 function pickFile(k){
   const f = $('#f_'+k).files[0]; FILES[k] = null; $('#n_'+k).textContent = '';
   if(!f) return;
   const okType = ['application/pdf','image/jpeg','image/png'].includes(f.type);
   if(!okType){ showAlert('#fErr','Format berkas harus PDF/JPG/PNG.'); $('#f_'+k).value=''; return; }
-  if(f.size > INFO.maxFileMb*1024*1024){ showAlert('#fErr','Ukuran berkas maksimal '+INFO.maxFileMb+' MB.'); $('#f_'+k).value=''; return; }
+  const maxB = INFO.maxFileMb*1024*1024, isPdf = f.type === 'application/pdf';
+  if(f.size > (isPdf ? maxB : 15*1024*1024)){ showAlert('#fErr', isPdf ? 'Ukuran berkas maksimal '+INFO.maxFileMb+' MB.' : 'Ukuran gambar terlalu besar.'); $('#f_'+k).value=''; return; }
   showAlert('#fErr','');
-  const r = new FileReader();
-  r.onload = () => { FILES[k] = {name:f.name, mime:f.type, data:String(r.result).split(',')[1]}; $('#n_'+k).textContent = '✓ ' + f.name; };
-  r.readAsDataURL(f);
+  const simpan = (blob, nama, mime) => {
+    const r = new FileReader();
+    r.onload = () => { FILES[k] = {name:nama, mime:mime, data:String(r.result).split(',')[1]}; $('#n_'+k).textContent = '✓ ' + nama; };
+    r.readAsDataURL(blob);
+  };
+  if(isPdf){ simpan(f, f.name, f.type); return; }
+  $('#n_'+k).textContent = 'Memproses gambar...';
+  kompresGambar(f, maxB * 0.9).then(b => {
+    if(b.size > maxB){ $('#n_'+k).textContent=''; $('#f_'+k).value=''; showAlert('#fErr','Gambar masih terlalu besar. Gunakan gambar lain.'); return; }
+    simpan(b, f.name.replace(/\.[^.]+$/, '') + '.jpg', 'image/jpeg');
+  }).catch(() => { $('#n_'+k).textContent=''; $('#f_'+k).value=''; showAlert('#fErr','Gambar tidak dapat dibaca. Coba berkas lain.'); });
 }
 let BUKTI = null;
 function cetakBukti(){
@@ -527,6 +576,8 @@ td.k{width:34%;background:#e4f3e8;font-weight:700}
 }
 async function kirim(){
   const btn = $('#btnKirim'); btn.disabled = true; btn.innerHTML = '<span class="loader"></span>Mengirim...';
+  let dtk = 0; const tm = setInterval(() => { dtk++; btn.innerHTML = '<span class="loader"></span>Mengirim... ' + dtk + ' dtk'; }, 1000);
+  showAlert('#fErr','');
   try{
     const data = {}; FIELDS.forEach(k => data[k] = val(k));
     const res = await call('submitPendaftaran', data, FILES);
@@ -535,7 +586,7 @@ async function kirim(){
     $('#formArea').style.display = 'none'; $('#doneArea').style.display = '';
     $('#s_no').value = res.noReg; $('#s_nisn').value = data.nisn;
   }catch(e){ showAlert('#fErr', e.message || String(e)); }
-  btn.disabled = false; btn.textContent = 'Kirim Pendaftaran';
+  clearInterval(tm); btn.disabled = false; btn.textContent = 'Kirim Pendaftaran';
 }
 function resetForm(){
   FIELDS.forEach(k => $('#'+k).value=''); ['kk','ijazah','foto'].forEach(k=>{ $('#f_'+k).value=''; $('#n_'+k).textContent=''; FILES[k]=null; });
@@ -608,6 +659,24 @@ async function simpanStatus(){
     await call('adminUpdateStatus', TOKEN, CUR['No Pendaftaran'], $('#mStatus').value, $('#mCatatan').value);
     closeModal(); await loadAdmin();
   }catch(e){ showAlert('#mErr', e.message || String(e)); }
+  btn.disabled = false; btn.textContent = 'Simpan';
+}
+function bukaGantiPw(){
+  ['pw_lama','pw_baru','pw_ulang'].forEach(i => $('#'+i).value = '');
+  showAlert('#pwErr',''); $('#modalPw').classList.add('show'); $('#pw_lama').focus();
+}
+function tutupGantiPw(){ $('#modalPw').classList.remove('show'); }
+async function simpanPw(){
+  const lama = $('#pw_lama').value, baru = $('#pw_baru').value, ulang = $('#pw_ulang').value;
+  if(!lama || !baru){ showAlert('#pwErr','Isi password lama dan password baru.'); return; }
+  if(baru.length < 8){ showAlert('#pwErr','Password baru minimal 8 karakter.'); return; }
+  if(baru !== ulang){ showAlert('#pwErr','Ulangi password baru tidak sama.'); return; }
+  const btn = $('#btnPw'); btn.disabled = true; btn.innerHTML = '<span class="loader"></span>Menyimpan...'; showAlert('#pwErr','');
+  try{
+    await call('adminGantiPassword', TOKEN, lama, baru);
+    tutupGantiPw(); adminLogout();
+    alert('Password berhasil diganti. Silakan login dengan password baru.');
+  }catch(e){ showAlert('#pwErr', e.message || String(e)); }
   btn.disabled = false; btn.textContent = 'Simpan';
 }
 async function setPengaturan(key, on){
