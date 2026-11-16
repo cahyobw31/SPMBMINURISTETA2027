@@ -114,6 +114,16 @@ textarea{min-height:80px;resize:vertical}
 .stat b{font-size:26px;display:block}.stat span{font-size:12px;color:var(--muted)}
 .tools{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
 .tools input,.tools select{width:auto;flex:1;min-width:160px}
+.pies{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:18px}
+.pie{border:1px solid var(--line);border-radius:12px;padding:16px;background:#fff;text-align:center}
+.pie h4{font-size:14px;margin-bottom:10px}
+.pie svg{width:100%;max-width:190px;height:auto;display:block;margin:0 auto 12px}
+.pie ul{list-style:none;text-align:left;font-size:13px;display:grid;gap:6px}
+.pie li{display:flex;align-items:center;gap:8px}
+.pie li i{width:12px;height:12px;border-radius:3px;flex:none}
+.pie li span{flex:1;min-width:0;overflow-wrap:anywhere}
+.pie li small{color:var(--muted)}
+@media(max-width:860px){.pies{grid-template-columns:1fr}}
 .tbl{overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th,td{padding:11px 12px;text-align:left;border-bottom:1px solid #eef1f6;white-space:nowrap}
@@ -240,7 +250,7 @@ footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-al
             <div><label>No. HP Orang Tua <em>*</em></label><input id="hp" inputmode="tel" placeholder="08xxxxxxxxxx"></div>
             <div><label>Email (opsional)</label><input id="email" type="email"></div>
             <div><label>Jalur Pendaftaran <em>*</em></label>
-              <select id="jalur"><option value="">-- Pilih --</option><option>Domisili</option><option>Prestasi</option><option>Afirmasi</option><option>Mutasi</option></select></div>
+              <select id="jalur"><option value="">-- Pilih --</option><option>Reguler</option><option>Indent</option></select></div>
           </div>
           <div class="actions"><span></span><button class="btn btn-p" onclick="nextStep(2)">Lanjut →</button></div>
         </div>
@@ -320,7 +330,8 @@ footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-al
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <select id="lapFilter" onchange="loadLaporan()" style="width:auto"><option value="semua">Semua pendaftar</option><option value="lulus">Hanya yang Lulus</option></select>
             <button class="btn btn-s" onclick="loadLaporan()">Hitung</button>
-            <button class="btn btn-p" id="btnUnduh" onclick="unduhLaporan()" disabled>Unduh laporan (CSV)</button>
+            <button class="btn btn-p" id="btnUnduh" onclick="cetakLaporan()" disabled>Cetak / Simpan PDF</button>
+            <button class="btn btn-s" id="btnCsv" onclick="unduhLaporan()" disabled>Data Excel (CSV)</button>
           </div>
         </div>
         <div id="lapBody" class="hint">Klik Hitung untuk melihat rata-rata usia dan persentase asal TK.</div>
@@ -552,17 +563,47 @@ async function setPengaturan(key, on){
 /* ===== LAPORAN HASIL SPMB ===== */
 let LAP = null;
 const persenTeks = n => String(n).replace('.', ',') + '%';
+const PIE_PAL = ['#dc2626','#2563eb','#16a34a','#f59e0b','#7c3aed','#0891b2','#db2777','#65a30d','#6b7280'];
+function pieHtml(judul, items, colors){
+  items = items.filter(i => i.jumlah > 0);
+  const tot = items.reduce((a, i) => a + i.jumlah, 0);
+  if(!tot) return `<div class="pie"><h4>${esc(judul)}</h4><p class="hint">Tidak ada data.</p></div>`;
+  let a0 = -Math.PI/2, paths = '';
+  items.forEach((it, i) => {
+    it.col = (colors && colors[i]) || PIE_PAL[i % PIE_PAL.length];
+    const fr = it.jumlah / tot, pct = persenTeks(Math.round(fr*1000)/10);
+    const tip = `<title>${esc(it.nama)}: ${it.jumlah} (${pct})</title>`;
+    if(fr >= 0.9999){ paths += `<circle cx="100" cy="100" r="90" fill="${it.col}">${tip}</circle>`; return; }
+    const a1 = a0 + fr*2*Math.PI, big = fr > .5 ? 1 : 0;
+    const x0 = 100+90*Math.cos(a0), y0 = 100+90*Math.sin(a0), x1 = 100+90*Math.cos(a1), y1 = 100+90*Math.sin(a1);
+    paths += `<path d="M100 100 L${x0.toFixed(2)} ${y0.toFixed(2)} A90 90 0 ${big} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${it.col}" stroke="#fff" stroke-width="2">${tip}</path>`;
+    a0 = a1;
+  });
+  const leg = items.map(it => `<li><i style="background:${it.col}"></i><span>${esc(it.nama)}</span><b>${persenTeks(Math.round(it.jumlah/tot*1000)/10)}</b><small>(${it.jumlah})</small></li>`).join('');
+  return `<div class="pie"><h4>${esc(judul)}</h4><svg viewBox="0 0 200 200" role="img" aria-label="${esc(judul)}">${paths}</svg><ul>${leg}</ul></div>`;
+}
+function chartsLaporan(){
+  let tk = LAP.tk.map(t => ({nama: t.nama, jumlah: t.jumlah}));
+  if(tk.length > 8){
+    const sisa = tk.slice(7).reduce((a, t) => a + t.jumlah, 0);
+    tk = tk.slice(0, 7).concat([{nama: 'Lainnya', jumlah: sisa}]);
+  }
+  const jk = [{nama: 'Laki-laki', jumlah: LAP.lk.jumlah}, {nama: 'Perempuan', jumlah: LAP.pr.jumlah}];
+  const usia = LAP.usiaGrup.map(u => ({nama: u.nama, jumlah: u.jumlah}));
+  return '<div class="pies">' + pieHtml('Asal TK', tk) + pieHtml('Jenis Kelamin', jk, ['#2563eb', '#ec4899']) + pieHtml('Usia', usia) + '</div>';
+}
 async function loadLaporan(){
-  const box = $('#lapBody'); box.textContent = 'Menghitung...'; $('#btnUnduh').disabled = true;
+  const box = $('#lapBody'); box.textContent = 'Menghitung...'; $('#btnUnduh').disabled = true; $('#btnCsv').disabled = true;
   try{
     LAP = await call('adminLaporan', TOKEN, $('#lapFilter').value);
     if(!LAP.total){ box.textContent = 'Belum ada data untuk pilihan ini.'; return; }
-    $('#btnUnduh').disabled = false;
+    $('#btnUnduh').disabled = false; $('#btnCsv').disabled = false;
     box.innerHTML = `<p style="font-size:14px;line-height:1.6;margin-bottom:12px">Jumlah peserta: <b>${LAP.total}</b>.
-      Rata-rata usia: <b>${esc(LAP.rataUsia)}</b> (termuda ${esc(LAP.usiaMin)}, tertua ${esc(LAP.usiaMax)}), dihitung per ${esc(LAP.acuan)}.</p>
+      Rata-rata usia: <b>${esc(LAP.rataUsia)}</b> (termuda ${esc(LAP.usiaMin)}, tertua ${esc(LAP.usiaMax)}), dihitung per ${esc(LAP.acuan)}.<br>
+      Laki-laki: <b>${LAP.lk.jumlah}</b> (${persenTeks(LAP.lk.persen)}), Perempuan: <b>${LAP.pr.jumlah}</b> (${persenTeks(LAP.pr.persen)}).</p>
       <div class="tbl"><table><thead><tr><th>Asal TK</th><th>Jumlah</th><th>Persentase</th></tr></thead><tbody>`+
       LAP.tk.map(t => `<tr><td>${esc(t.nama)}</td><td>${t.jumlah}</td><td>${persenTeks(t.persen)}</td></tr>`).join('')+
-      `</tbody></table></div>`;
+      `</tbody></table></div>` + chartsLaporan();
   }catch(e){ box.textContent = e.message || String(e); }
 }
 function unduhLaporan(){
@@ -571,7 +612,8 @@ function unduhLaporan(){
   const teks = v => v ? '="' + String(v).replace(/"/g, '""') + '"' : ''; // agar angka 0 di depan NISN tidak hilang
   const rows = [
     ['Laporan hasil SPMB', LAP.tahun], ['Data yang dihitung', LAP.filterLabel], ['Jumlah peserta', LAP.total],
-    ['Rata-rata usia', LAP.rataUsia], ['Usia termuda', LAP.usiaMin], ['Usia tertua', LAP.usiaMax], ['Usia dihitung per', LAP.acuan], [],
+    ['Rata-rata usia', LAP.rataUsia], ['Usia termuda', LAP.usiaMin], ['Usia tertua', LAP.usiaMax], ['Usia dihitung per', LAP.acuan],
+    ['Laki-laki', LAP.lk.jumlah + ' (' + persenTeks(LAP.lk.persen) + ')'], ['Perempuan', LAP.pr.jumlah + ' (' + persenTeks(LAP.pr.persen) + ')'], [],
     ['Asal TK', 'Jumlah', 'Persentase']
   ].concat(LAP.tk.map(t => [t.nama, t.jumlah, persenTeks(t.persen)]), [[],
     ['No. Pendaftaran','Nama','NISN','Jenis Kelamin','Tanggal Lahir','Usia','Asal TK (dibakukan)','Asal TK (ditulis pendaftar)','Jalur','Status']
@@ -583,6 +625,71 @@ function unduhLaporan(){
   a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'}));
   a.download = 'laporan-spmb-' + new Date().toISOString().slice(0, 10) + '.csv';
   document.body.appendChild(a); a.click(); a.remove();
+}
+
+const BLN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+function htmlLaporan(){
+  const logo = document.querySelector('.logo-img');
+  const now = new Date(), p2 = n => String(n).padStart(2, '0');
+  const tglCetak = `${p2(now.getDate())}/${p2(now.getMonth()+1)}/${now.getFullYear()} ${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  const tglTtd = `${now.getDate()} ${BLN[now.getMonth()]} ${now.getFullYear()}`;
+  const urut = LAP.peserta.slice().sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+  const baris = urut.map((p, i) => `<tr><td class="c">${i+1}</td><td>${esc(p.nama)}</td><td>${esc(p.asalTk)}</td><td>${esc(p.usia)}</td><td>${esc(p.jk)}</td></tr>`).join('');
+  const ringkas = [
+    ['Total peserta', LAP.total],
+    ['Laki-laki', `${LAP.lk.jumlah} (${persenTeks(LAP.lk.persen)})`],
+    ['Perempuan', `${LAP.pr.jumlah} (${persenTeks(LAP.pr.persen)})`],
+    ['Rata-rata usia', LAP.rataUsia], ['Usia termuda', LAP.usiaMin], ['Usia tertua', LAP.usiaMax]
+  ].map(r => `<tr><td>${esc(r[0])}</td><td class="r">${esc(r[1])}</td></tr>`).join('');
+  const tk = LAP.tk.map(t => `<tr><td>${esc(t.nama)}</td><td class="r">${t.jumlah}</td><td class="r">${persenTeks(t.persen)}</td></tr>`).join('');
+  return `<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Laporan SPMB ${esc(String(LAP.tahun).replace('/', '-'))}</title>
+<style>
+@page{size:A4;margin:12mm 14mm 14mm}
+*{box-sizing:border-box}
+body{font-family:Arial,Helvetica,sans-serif;color:#000;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.kop{display:flex;align-items:center;gap:14px;padding-bottom:6px;border-bottom:4px double #000}
+.kop img{width:80px;height:80px;object-fit:contain;flex:none}
+.kop .l{flex:1}
+.kop .l .n{font-size:21px;font-weight:700;line-height:1.05;letter-spacing:-.3px}
+.kop .l .t{font-size:19px;font-weight:700;letter-spacing:1px}
+.kop .l .a{font-size:13px;font-weight:700}
+.kop .l .m{font-size:9.5px;font-style:italic;margin-top:3px}
+.kop .r{text-align:right;font-size:11px;font-style:italic;line-height:1.35;font-family:Georgia,'Times New Roman',serif}
+h1{text-align:center;font-size:21px;margin:22px 0 8px}
+.c0{text-align:center;font-size:13px;margin:5px 0}
+table{width:100%;border-collapse:collapse;margin-top:16px}
+th{background:#10b981;color:#fff;border:1px solid #000;padding:5px 6px;font-size:12px;text-transform:uppercase}
+td{border:1px solid #000;padding:4px 6px}
+td.r{text-align:right}td.c{text-align:center;width:36px}
+thead{display:table-header-group}tr{page-break-inside:avoid}
+h4{margin:20px 0 0;font-size:13px}
+.ttd{display:flex;justify-content:space-between;margin-top:34px;page-break-inside:avoid;font-size:13px}
+.ttd>div{width:45%;text-align:center;line-height:1.7}
+.ttd .sp{height:62px}
+.ttd b{letter-spacing:.5px}
+</style></head><body onload="setTimeout(function(){window.print()},300)">
+<div class="kop">${logo ? `<img src="${logo.src}" alt="">` : ''}
+  <div class="l"><div class="n">MADRASAH IBTIDA'IYAH NURUL ISLAM</div><div class="t">TEMPEH TENGAH</div><div class="a">Terakreditasi B</div>
+  <div class="m">Mewujudkan generasi santun dalam pekerti, tangguh dalam kompetisi, dan unggul dalam prestasi</div></div>
+  <div class="r">Jl. Ir. Soekarno No.104 Tempeh<br>email : minuristempeh@gmail.com<br>NSM : 111235080079<br>NPSN : 60715429</div></div>
+<h1>LAPORAN SPMB ${esc(LAP.tahun)}</h1>
+<div class="c0">Filter: ${esc(LAP.filterLabel)}</div>
+<div class="c0">Tanggal Cetak: ${tglCetak}</div>
+<table><thead><tr><th>Keterangan</th><th>Jumlah</th></tr></thead><tbody>${ringkas}</tbody></table>
+<h4>Rekap Asal TK</h4>
+<table style="margin-top:6px"><thead><tr><th>Asal TK</th><th style="width:90px">Jumlah</th><th style="width:110px">Persentase</th></tr></thead><tbody>${tk}</tbody></table>
+<h4>Daftar Peserta Didik Baru</h4>
+<table style="margin-top:6px"><thead><tr><th style="width:36px">No</th><th>Nama</th><th>Asal TK</th><th>Usia</th><th>Jenis Kelamin</th></tr></thead><tbody>${baris}</tbody></table>
+<div class="ttd">
+  <div><br>Mengetahui,<br>Kepala Sekolah<div class="sp"></div><b>(................................)</b></div>
+  <div>Lumajang, ${tglTtd}<br><br>Ketua Panitia SPMB<div class="sp"></div><b>(................................)</b></div>
+</div></body></html>`;
+}
+function cetakLaporan(){
+  if(!LAP) return;
+  const w = window.open('', '_blank');
+  if(!w){ alert('Izinkan pop-up untuk situs ini, lalu klik tombol lagi.'); return; }
+  w.document.open(); w.document.write(htmlLaporan()); w.document.close();
 }
 </script>
 </body>
