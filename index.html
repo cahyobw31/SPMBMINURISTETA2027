@@ -25,10 +25,10 @@ header{background:var(--navy);position:sticky;top:0;z-index:50}
 .brand{display:flex;align-items:center;gap:10px;color:#fff;cursor:pointer;margin-right:auto}
 .brand .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#1a9a5a,#d4a72c);display:grid;place-items:center;font-size:22px}
 .brand .logo-img{width:44px;height:44px;object-fit:contain;flex:none}
-.brand b{color:#ffffff;font-size:18px;font-weight:800;display:block;line-height:1.1}
-.brand small{font-size:10px;opacity:1;color:#ffffff;font-weight:600}
+.brand b{font-size:18px;font-weight:800;display:block;line-height:1.1}
+.brand small{font-size:10px;opacity:.85;font-weight:600}
 .links{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.links a{color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer}
+.links a{color:#e8f5ec;text-decoration:none;font-size:14px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer}
 .links a.active{background:rgba(255,255,255,.15);color:#fff}
 .links a:hover{background:rgba(255,255,255,.1)}
 .pill{background:#ffffff!important;color:var(--navy)!important;border-radius:999px!important;padding:10px 18px!important;font-weight:700!important}
@@ -301,6 +301,17 @@ footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-al
         <label><input type="checkbox" id="swDaftar" onchange="setPengaturan('PENDAFTARAN_DIBUKA',this.checked)"> Pendaftaran dibuka</label>
         <label><input type="checkbox" id="swUmum" onchange="setPengaturan('PENGUMUMAN_DIBUKA',this.checked)"> Pengumuman kelulusan dibuka</label>
       </div>
+      <div class="card" style="margin-bottom:18px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+          <h3>Laporan hasil SPMB</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select id="lapFilter" onchange="loadLaporan()" style="width:auto"><option value="semua">Semua pendaftar</option><option value="lulus">Hanya yang Lulus</option></select>
+            <button class="btn btn-s" onclick="loadLaporan()">Hitung</button>
+            <button class="btn btn-p" id="btnUnduh" onclick="unduhLaporan()" disabled>Unduh laporan (CSV)</button>
+          </div>
+        </div>
+        <div id="lapBody" class="hint">Klik Hitung untuk melihat rata-rata usia dan persentase asal TK.</div>
+      </div>
       <div class="tools">
         <input id="q" placeholder="Cari nama / NISN / no. pendaftaran" oninput="renderTable()">
         <select id="fStatus" onchange="renderTable()"><option value="">Semua status</option></select>
@@ -523,6 +534,42 @@ async function simpanStatus(){
 }
 async function setPengaturan(key, on){
   try{ await call('adminSetPengaturan', TOKEN, key, on); }catch(e){ alert(e.message || String(e)); loadAdmin(); }
+}
+
+/* ===== LAPORAN HASIL SPMB ===== */
+let LAP = null;
+const persenTeks = n => String(n).replace('.', ',') + '%';
+async function loadLaporan(){
+  const box = $('#lapBody'); box.textContent = 'Menghitung...'; $('#btnUnduh').disabled = true;
+  try{
+    LAP = await call('adminLaporan', TOKEN, $('#lapFilter').value);
+    if(!LAP.total){ box.textContent = 'Belum ada data untuk pilihan ini.'; return; }
+    $('#btnUnduh').disabled = false;
+    box.innerHTML = `<p style="font-size:14px;line-height:1.6;margin-bottom:12px">Jumlah peserta: <b>${LAP.total}</b>.
+      Rata-rata usia: <b>${esc(LAP.rataUsia)}</b> (termuda ${esc(LAP.usiaMin)}, tertua ${esc(LAP.usiaMax)}), dihitung per ${esc(LAP.acuan)}.</p>
+      <div class="tbl"><table><thead><tr><th>Asal TK</th><th>Jumlah</th><th>Persentase</th></tr></thead><tbody>`+
+      LAP.tk.map(t => `<tr><td>${esc(t.nama)}</td><td>${t.jumlah}</td><td>${persenTeks(t.persen)}</td></tr>`).join('')+
+      `</tbody></table></div>`;
+  }catch(e){ box.textContent = e.message || String(e); }
+}
+function unduhLaporan(){
+  if(!LAP) return;
+  const c = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const teks = v => v ? '="' + String(v).replace(/"/g, '""') + '"' : ''; // agar angka 0 di depan NISN tidak hilang
+  const rows = [
+    ['Laporan hasil SPMB', LAP.tahun], ['Data yang dihitung', LAP.filterLabel], ['Jumlah peserta', LAP.total],
+    ['Rata-rata usia', LAP.rataUsia], ['Usia termuda', LAP.usiaMin], ['Usia tertua', LAP.usiaMax], ['Usia dihitung per', LAP.acuan], [],
+    ['Asal TK', 'Jumlah', 'Persentase']
+  ].concat(LAP.tk.map(t => [t.nama, t.jumlah, persenTeks(t.persen)]), [[],
+    ['No. Pendaftaran','Nama','NISN','Jenis Kelamin','Tanggal Lahir','Usia','Asal TK (dibakukan)','Asal TK (ditulis pendaftar)','Jalur','Status']
+  ], LAP.peserta.map(p => [p.noReg, p.nama, null, p.jk, p.tglLahir, p.usia, p.asalTk, p.asalAsli, p.jalur, p.status]));
+  const nisn = LAP.peserta.map(p => p.nisn);
+  let k = 0, mulai = rows.length - LAP.peserta.length;
+  const csv = rows.map((r, i) => r.map((v, j) => (i >= mulai && j === 2) ? teks(nisn[k++ ]) : c(v)).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + csv], {type: 'text/csv;charset=utf-8'}));
+  a.download = 'laporan-spmb-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
 }
 </script>
 </body>
