@@ -55,6 +55,7 @@ main{flex:1}
 .btn{border:0;border-radius:10px;padding:14px 26px;font-size:15px;font-weight:700;transition:.2s}
 .btn-p{background:var(--blue);color:#fff;box-shadow:0 6px 16px rgba(15,122,71,.3)}
 .btn-p:hover{background:var(--blue-d);transform:translateY(-1px)}
+#btnBukti:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none}
 .btn-s{background:#fff;color:var(--ink);border:1px solid var(--line)}
 .btn-s:hover{background:#fff}
 .btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
@@ -300,6 +301,10 @@ footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-al
       </div>
       <div id="sRes" style="display:none;margin-top:22px;padding-top:20px;border-top:1px solid #eef1f6">
         <div class="review"><dl id="sResList"></dl></div>
+        <div style="text-align:center;margin-top:18px">
+          <button class="btn btn-p" id="btnBukti" onclick="cetakBukti(CEK)" disabled>⬇ Unduh Bukti Pendaftaran</button>
+          <p id="bktHint" style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5"></p>
+        </div>
       </div>
     </div>
   </div>
@@ -523,25 +528,31 @@ function pickFile(k){
     simpan(b, f.name.replace(/\.[^.]+$/, '') + '.jpg', 'image/jpeg');
   }).catch(() => { $('#n_'+k).textContent=''; $('#f_'+k).value=''; showAlert('#fErr','Gambar tidak dapat dibaca. Coba berkas lain.'); });
 }
-let BUKTI = null;
-function cetakBukti(){
-  if(!BUKTI) return;
+let BUKTI = null, CEK = null;
+const fmtWaktu = s => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(s || ''));
+  return m ? `${Number(m[3])} ${BLN[Number(m[2])-1]} ${m[1]}, ${m[4]}.${m[5]} WIB` : String(s || '-');
+};
+function cetakBukti(src){
+  src = src || BUKTI;
+  if(!src) return;
   const w = window.open('', '_blank');
   if(!w){ alert('Izinkan pop-up untuk situs ini, lalu klik tombol lagi.'); return; }
-  const d = BUKTI.data, p2 = n => String(n).padStart(2, '0'), n = BUKTI.waktu;
-  const waktu = `${n.getDate()} ${BLN[n.getMonth()]} ${n.getFullYear()}, ${p2(n.getHours())}.${p2(n.getMinutes())} WIB`;
-  const tl = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d.tglLahir);
-  const tglLahir = tl ? `${Number(tl[3])} ${BLN[Number(tl[2])-1]} ${tl[1]}` : d.tglLahir;
+  const tl = /^(\d{4})-(\d{2})-(\d{2})$/.exec(src.tglLahir || '');
+  const tglLahir = tl ? `${Number(tl[3])} ${BLN[Number(tl[2])-1]} ${tl[1]}` : (src.tglLahir || '');
   const logo = document.querySelector('.logo-img');
+  const berkasTxt = k => src.berkas && src.berkas[k] ? src.berkas[k] : 'Sudah diunggah';
   const baris = [
-    ['NISN', d.nisn], ['Nama Lengkap', d.nama], ['Jenis Kelamin', d.jk],
-    ['Tempat, Tanggal Lahir', d.tempatLahir + ', ' + tglLahir], ['Asal Sekolah', d.asalSekolah],
-    ['Alamat', d.alamat], ['Nama Orang Tua/Wali', d.ortu], ['No. HP Orang Tua', d.hp],
-    ['Email', d.email || '-'], ['Jalur Pendaftaran', d.jalur],
-    ['Berkas KK', BUKTI.berkas.kk], ['Berkas Ijazah/SKL', BUKTI.berkas.ijazah], ['Berkas Pas Foto', BUKTI.berkas.foto]
-  ].map(r => `<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('');
-  w.document.open();
-  w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Bukti Pendaftaran ${esc(BUKTI.noReg)}</title>
+    ['NISN', src.nisn], ['Nama Lengkap', src.nama], ['Jenis Kelamin', src.jk],
+    ['Tempat, Tanggal Lahir', src.tempatLahir ? src.tempatLahir + ', ' + tglLahir : ''], ['Asal Sekolah', src.asalSekolah],
+    ['Alamat', src.alamat], ['Nama Orang Tua/Wali', src.ortu], ['No. HP Orang Tua', src.hp],
+    ['Email', src.email || '-'], ['Jalur Pendaftaran', src.jalur],
+    ['Berkas KK', berkasTxt('kk')], ['Berkas Ijazah/SKL', berkasTxt('ijazah')], ['Berkas Pas Foto', berkasTxt('foto')]
+  ].filter(r => r[1]).map(r => `<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('');
+  const waktu = src.waktu;
+  const status = src.status || 'Menunggu Verifikasi';
+  const catatan = src.catatan ? `<tr><td class="k">Catatan</td><td>${esc(src.catatan)}</td></tr>` : '';
+  w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><title>Bukti Pendaftaran ${esc(src.noReg)}</title>
 <style>
 @page{size:A4;margin:12mm 14mm 14mm}
 *{box-sizing:border-box}
@@ -567,8 +578,8 @@ td.k{width:34%;background:#e4f3e8;font-weight:700}
  <div class="r">Jl. Ir. Soekarno No.104 Tempeh<br>email : minuristempeh@gmail.com<br>NSM : 111235080079<br>NPSN : 60715429</div></div>
 <h1>BUKTI PENDAFTARAN SPMB ${esc(INFO.tahun || '2026/2027')}</h1>
 <div class="sub">Telah terdaftar pada ${esc(waktu)}</div>
-<div class="no"><small>Nomor Pendaftaran</small><b>${esc(BUKTI.noReg)}</b></div>
-<table><tbody>${baris}<tr><td class="k">Status</td><td><b>Menunggu Verifikasi</b></td></tr></tbody></table>
+<div class="no"><small>Nomor Pendaftaran</small><b>${esc(src.noReg)}</b></div>
+<table><tbody>${baris}<tr><td class="k">Status</td><td><b>${esc(status)}</b></td></tr>${catatan}</tbody></table>
 <div class="st"><b>Catatan:</b> Simpan bukti ini. Gunakan Nomor Pendaftaran dan NISN untuk Cek Status di situs SPMB. Data dan berkas akan diverifikasi oleh panitia. Dokumen ini bukan bukti kelulusan.</div>
 <div class="ttd"><div>Panitia SPMB<div class="sp"></div><b>(................................)</b></div></div>
 </body></html>`);
@@ -581,7 +592,7 @@ async function kirim(){
   try{
     const data = {}; FIELDS.forEach(k => data[k] = val(k));
     const res = await call('submitPendaftaran', data, FILES);
-    BUKTI = {noReg: res.noReg, data: Object.assign({}, data), berkas: {kk: FILES.kk.name, ijazah: FILES.ijazah.name, foto: FILES.foto.name}, waktu: new Date()};
+    BUKTI = Object.assign({}, data, {noReg: res.noReg, status: 'Menunggu Verifikasi', waktu: fmtWaktu(new Date().toLocaleString('sv-SE', {timeZone: 'Asia/Jakarta'})), berkas: {kk: FILES.kk.name, ijazah: FILES.ijazah.name, foto: FILES.foto.name}});
     $('#doneNo').textContent = res.noReg;
     $('#formArea').style.display = 'none'; $('#doneArea').style.display = '';
     $('#s_no').value = res.noReg; $('#s_nisn').value = data.nisn;
@@ -599,6 +610,12 @@ async function cek(){
   showAlert('#sErr',''); $('#sRes').style.display='none';
   try{
     const r = await call('cekStatus', $('#s_no').value, $('#s_nisn').value);
+    CEK = Object.assign({}, r, {waktu: fmtWaktu(r.tanggal)});
+    const terverifikasi = ['Terverifikasi','Lulus','Tidak Lulus','Menunggu Pengumuman'].includes(r.status);
+    $('#btnBukti').disabled = !terverifikasi;
+    $('#bktHint').textContent = terverifikasi ? '' : (r.status === 'Perlu Perbaikan'
+      ? 'Bukti dapat diunduh setelah data diperbaiki dan diverifikasi admin.'
+      : 'Tombol aktif setelah data Anda diverifikasi oleh admin.');
     $('#sResList').innerHTML =
       `<dt>No. Pendaftaran</dt><dd>${esc(r.noReg)}</dd><dt>Nama</dt><dd>${esc(r.nama)}</dd>`+
       `<dt>Jalur</dt><dd>${esc(r.jalur)}</dd><dt>Tanggal Daftar</dt><dd>${esc(r.tanggal)}</dd>`+
