@@ -399,7 +399,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
           <h3>Laporan hasil SPMB</h3>
           <div class="lap-tools">
-            <select id="lapFilter" onchange="loadLaporan()">\1</select>
+            <select id="lapFilter" onchange="loadLaporan()"><option value="semua">Semua pendaftar</option><option value="lulus">Hanya yang Lulus</option></select>
             <button class="btn btn-p" id="btnUnduh" onclick="cetakLaporan()" disabled>Cetak / Simpan PDF</button>
             <button class="btn btn-s" id="btnCsv" onclick="unduhLaporan()" disabled>Data Excel (CSV)</button>
           </div>
