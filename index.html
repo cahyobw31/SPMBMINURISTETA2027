@@ -328,6 +328,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
           <div class="grid">
             <div><label>NIK Calon Siswa <em>*</em></label><input id="nik" maxlength="16" inputmode="numeric" placeholder="16 digit sesuai KK"></div>
             <div><label>Nama Lengkap <em>*</em></label><input id="nama" placeholder="Sesuai KK / akta kelahiran"></div>
+            <div><label>Nama Panggilan <em>*</em></label><input id="namaPanggilan" maxlength="50" placeholder="Nama panggilan sehari-hari"></div>
             <div><label>Jenis Kelamin <em>*</em></label>
               <select id="jk"><option value="">-- Pilih --</option><option>Laki-laki</option><option>Perempuan</option></select></div>
             <div><label>Tempat Lahir <em>*</em></label><input id="tempatLahir"></div>
@@ -335,7 +336,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
             <div><label>Asal Sekolah <em>*</em></label><input id="asalSekolah" placeholder="Nama TK/RA/BA asal"></div>
             <div class="full"><label>Anak ke ... dari ... bersaudara <em>*</em></label>
               <div class="sib"><span>Anak ke</span><input id="anakKe" type="number" inputmode="numeric" min="1" max="30" placeholder="1"><span>dari</span><input id="jumlahSaudara" type="number" inputmode="numeric" min="1" max="30" placeholder="3"><span>bersaudara</span></div></div>
-            <div class="full"><label>Alamat Lengkap <em>*</em></label><textarea id="alamat"></textarea></div>
+            <div class="full"><label>Alamat Lengkap <em>*</em></label><textarea id="alamat" placeholder="Dusun, Desa, RT/RW, Kecamatan, Kabupaten"></textarea></div>
             <div><label>Email (opsional)</label><input id="email" type="email"></div>
             <div><label>Jalur Pendaftaran <em>*</em></label>
               <select id="jalur"><option value="">-- Pilih --</option><option>Reguler</option><option>Indent</option></select></div>
@@ -572,7 +573,7 @@ heroArt();
 kunciDaftar(); setInterval(kunciDaftar, 60000);
 
 /* ===== FORMULIR ===== */
-const LBL = {nik:'NIK',nama:'Nama Lengkap',jk:'Jenis Kelamin',tempatLahir:'Tempat Lahir',tglLahir:'Tanggal Lahir',asalSekolah:'Asal Sekolah',anakKe:'Anak ke',jumlahSaudara:'Jumlah Bersaudara',alamat:'Alamat',email:'Email',jalur:'Jalur'};
+const LBL = {nik:'NIK',nama:'Nama Lengkap',namaPanggilan:'Nama Panggilan',jk:'Jenis Kelamin',tempatLahir:'Tempat Lahir',tglLahir:'Tanggal Lahir',asalSekolah:'Asal Sekolah',anakKe:'Anak ke',jumlahSaudara:'Jumlah Bersaudara',alamat:'Alamat',email:'Email',jalur:'Jalur'};
 const FIELDS = Object.keys(LBL);
 const PF = ['nama','tempat','tgl','alamat','pend','kerja','hp'];
 const PL = {nama:'Nama',tempat:'Tempat Lahir',tgl:'Tanggal Lahir',alamat:'Alamat',pend:'Pendidikan Terakhir',kerja:'Pekerjaan',hp:'No. Telp/WA'};
@@ -626,7 +627,7 @@ const tglOk = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s)) && new D
 const hpOk = s => /^(\+62|62|0)8\d{7,12}$/.test(s);
 
 function validate1(){
-  const req = ['nik','nama','jk','tempatLahir','tglLahir','asalSekolah','anakKe','jumlahSaudara','alamat','jalur'];
+  const req = ['nik','nama','namaPanggilan','jk','tempatLahir','tglLahir','asalSekolah','anakKe','jumlahSaudara','alamat','jalur'];
   for(const k of req) if(!val(k)) return 'Lengkapi kolom: ' + LBL[k];
   if(!/^\d{16}$/.test(val('nik'))) return 'NIK harus 16 digit angka.';
   if(!tglOk(val('tglLahir'))) return 'Tanggal lahir tidak valid.';
@@ -656,7 +657,7 @@ function validate2(){
 const fmtTgl = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? `${Number(m[3])} ${BLN[Number(m[2])-1]} ${m[1]}` : (s || ''); };
 function rowsSiswa(d){
   return [
-    ['NIK', d.nik], ['Nama Lengkap', d.nama], ['Jenis Kelamin', d.jk],
+    ['NIK', d.nik], ['Nama Lengkap', d.nama], ['Nama Panggilan', d.namaPanggilan], ['Jenis Kelamin', d.jk],
     ['Tempat, Tanggal Lahir', d.tempatLahir ? d.tempatLahir + ', ' + fmtTgl(d.tglLahir) : ''],
     ['Asal Sekolah', d.asalSekolah],
     ['Anak ke', d.anakKe ? `${d.anakKe} dari ${d.jumlahSaudara} bersaudara` : ''],
