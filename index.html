@@ -281,7 +281,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
       <p>Bergabunglah bersama keluarga MI Nurul Islam Tempeh Tengah, tumbuhkan generasi yang Santun dalam pekerti, Tangguh dalam kompetisi, dan Unggul dalam prestasi.</p>
       <div class="cta">
         <button class="btn btn-p" onclick="go('daftar')">Mulai Pendaftaran</button>
-        <button class="btn btn-s" onclick="go('status')">🔍 Cek Kelulusan</button>
+        <button class="btn btn-s" onclick="go('status')">🔍 Cek Status</button>
       </div>
     </div>
     <div class="art" id="heroArt"></div>
@@ -313,6 +313,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
   <div class="wrap narrow">
     <div class="title"><h2>Formulir Pendaftaran</h2><p>Isi data dengan benar sesuai dokumen resmi</p></div>
     <div class="card">
+      <div id="testBanner" class="alert" style="display:none;background:#fff7e0;border:1px solid #f5b82e;color:#6b4e00"><b>🧪 Mode uji coba admin.</b> Semua pengecekan dijalankan seperti pendaftaran asli, tetapi data <b>tidak disimpan</b>. <button class="btn btn-s" style="margin-left:8px;padding:4px 12px" onclick="akhiriUji()">← Kembali ke Dashboard</button></div>
       <div id="closedMsg" class="alert err">Pendaftaran saat ini sedang ditutup.</div>
       <div id="formArea">
         <div class="stepper" id="stepper">
@@ -405,12 +406,12 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
     <div id="admPanel" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
         <h2>Dashboard Admin</h2>
-        <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-s" id="lnkSheet" target="_blank" style="text-decoration:none">📊 Buka Spreadsheet</a><button class="btn btn-s" onclick="bukaGantiPw()">🔑 Ganti Password</button><button class="btn btn-s" onclick="adminLogout()">Keluar</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn btn-s" id="lnkSheet" target="_blank" style="text-decoration:none">📊 Buka Spreadsheet</a><button class="btn btn-s" onclick="mulaiUji()">🧪 Uji Coba Daftar</button><button class="btn btn-s" onclick="bukaGantiPw()">🔑 Ganti Password</button><button class="btn btn-s" onclick="adminLogout()">Keluar</button></div>
       </div>
       <div class="stats" id="admStats"></div>
       <div class="sw">
         <label><input type="checkbox" id="swDaftar" onchange="setPengaturan('PENDAFTARAN_DIBUKA',this.checked)"> Pendaftaran dibuka</label>
-        <label><input type="checkbox" id="swUmum" onchange="setPengaturan('PENGUMUMAN_DIBUKA',this.checked)"> Pengumuman kelulusan dibuka</label>
+        <label><input type="checkbox" id="swUmum" onchange="setPengaturan('PENGUMUMAN_DIBUKA',this.checked)"> Pengumuman hasil seleksi dibuka</label>
       </div>
       <div class="card" style="margin-bottom:18px">
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">
@@ -535,8 +536,10 @@ function tampilCountdown(){ tickCd(); $('#cdModal').classList.add('show'); clear
 function kunciDaftar(){
   document.querySelectorAll('[onclick="go(\'daftar\')"]').forEach(el => el.classList.toggle('locked', belumBuka()));
 }
+let TEST = false;
 function go(p){
-  if(p === 'daftar' && belumBuka()){ tampilCountdown(); return; }
+  if(p !== 'daftar' && p !== 'admin' && TEST) setUji(false);
+  if(p === 'daftar' && belumBuka() && !TEST){ tampilCountdown(); return; }
   document.querySelectorAll('.page').forEach(x => x.classList.toggle('active', x.id === 'page-' + p));
   document.querySelectorAll('.links a[data-p]').forEach(a => a.classList.toggle('active', a.dataset.p === p));
   const lk = $('.links'); if(lk) lk.classList.remove('open');
@@ -739,6 +742,12 @@ async function kirim(){
   showAlert('#fErr','');
   try{
     const data = collect();
+    if(TEST){
+      const u = await call('adminUjiDaftar', TOKEN, data);
+      showAlert('#fErr','');
+      alert('✅ Uji coba berhasil: semua data lengkap & valid.\nNama: ' + u.nama + '\nNo. pendaftaran berikutnya: ' + u.noRegBerikutnya + '\n\n(Data tidak disimpan.)');
+      clearInterval(tm); btn.disabled = false; setUji(true); return;
+    }
     const res = await call('submitPendaftaran', data);
     BUKTI = Object.assign({}, data, {noReg: res.noReg, status: 'Menunggu Verifikasi', waktu: fmtWaktu(new Date().toLocaleString('sv-SE', {timeZone: 'Asia/Jakarta'}))});
     $('#doneNo').textContent = res.noReg;
@@ -746,7 +755,7 @@ async function kirim(){
     $('#s_no').value = res.noReg; $('#s_nik').value = data.nik;
     if(WA_GROUP_URL){ $('#waLink').href = WA_GROUP_URL; $('#waBox').style.display = ''; }
   }catch(e){ showAlert('#fErr', e.message || String(e)); }
-  clearInterval(tm); btn.disabled = false; btn.textContent = 'Kirim Pendaftaran';
+  clearInterval(tm); btn.disabled = false; btn.textContent = TEST ? 'Uji Kirim (tidak disimpan)' : 'Kirim Pendaftaran';
 }
 function resetForm(){
   FIELDS.forEach(k => $('#'+k).value = '');
@@ -785,7 +794,16 @@ async function adminLogin(){
   catch(e){ showAlert('#aErr', e.message || String(e)); }
   btn.disabled = false; btn.textContent = 'Masuk';
 }
-function adminLogout(){ TOKEN=''; DATA=null; $('#admPanel').style.display='none'; $('#admLogin').style.display=''; }
+function setUji(on){
+  TEST = on;
+  $('#testBanner').style.display = on ? '' : 'none';
+  $('#btnKirim').textContent = on ? 'Uji Kirim (tidak disimpan)' : 'Kirim Pendaftaran';
+  if(on){ $('#closedMsg').classList.remove('show'); $('#formArea').style.display = ''; }
+  else { $('#closedMsg').classList.toggle('show', INFO.pendaftaranDibuka === false); $('#formArea').style.display = INFO.pendaftaranDibuka === false ? 'none' : ''; }
+}
+function mulaiUji(){ resetForm(); setUji(true); go('daftar'); }
+function akhiriUji(){ resetForm(); setUji(false); go('admin'); }
+function adminLogout(){ if(TEST){ resetForm(); setUji(false); } TOKEN=''; DATA=null; $('#admPanel').style.display='none'; $('#admLogin').style.display=''; }
 async function loadAdmin(){
   try{
     DATA = await call('adminGetData', TOKEN);
