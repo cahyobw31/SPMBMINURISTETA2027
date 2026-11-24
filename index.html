@@ -110,6 +110,9 @@ textarea{min-height:80px;resize:vertical}
 .st.TidakLulus{background:#fee2e2;color:var(--bad)}
 .st.PerluPerbaikan{background:#fef3c7;color:var(--warn)}
 .st.MenungguVerifikasi,.st.MenungguPengumuman{background:#e4e9f3;color:#475569}
+.st-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#eef5f0;padding:4px;border-radius:12px;margin-bottom:18px}
+.st-tabs button{border:0;background:transparent;padding:10px 12px;border-radius:9px;font-size:13px;font-weight:700;color:var(--muted);transition:.18s}
+.st-tabs button.on{background:#fff;color:var(--navy);box-shadow:0 2px 8px rgba(10,92,54,.1)}
 
 /* ADMIN */
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
@@ -399,15 +402,25 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
     <div class="title"><h2>Cek Status</h2><p>Lihat progres verifikasi &amp; hasil seleksi</p></div>
     <div class="card">
       <div id="sErr" class="alert err"></div>
+      <div class="st-tabs" role="tablist">
+        <button type="button" id="stTabNama" class="on" onclick="setCekMode('nama')">Nama &amp; Tanggal Lahir</button>
+        <button type="button" id="stTabNo" onclick="setCekMode('no')">No. Pendaftaran &amp; NIK</button>
+      </div>
       <div style="display:grid;gap:14px">
-        <div><label>No. Pendaftaran</label><input id="s_no" placeholder="SPMB27-0001"></div>
-        <div><label>NIK Calon Siswa</label><input id="s_nik" maxlength="16" inputmode="numeric"></div>
+        <div id="stGrpNama" style="display:grid;gap:14px">
+          <div><label>Nama Lengkap Calon Siswa</label><input id="s_nama" placeholder="Sesuai saat pendaftaran"></div>
+          <div><label>Tanggal Lahir Calon Siswa</label><input id="s_tgl" type="date"></div>
+        </div>
+        <div id="stGrpNo" style="display:none;gap:14px">
+          <div><label>No. Pendaftaran</label><input id="s_no" placeholder="SPMB27-0001"></div>
+          <div><label>NIK Calon Siswa</label><input id="s_nik" maxlength="16" inputmode="numeric"></div>
+        </div>
         <button class="btn btn-p" id="btnCek" onclick="cek()">Cek Sekarang</button>
       </div>
       <div id="sRes" style="display:none;margin-top:22px;padding-top:20px;border-top:1px solid #eef1f6">
         <div class="review"><dl id="sResList"></dl></div>
         <div style="text-align:center;margin-top:18px">
-          <button class="btn btn-p" id="btnBukti" onclick="cetakBukti(CEK)" disabled>⬇ Unduh Bukti Pendaftaran</button>
+          <button class="btn btn-p" id="btnBukti" onclick="cetakBukti(CEK)">⬇ Unduh Bukti Pendaftaran</button>
           <p id="bktHint" style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5"></p>
         </div>
       </div>
@@ -817,6 +830,7 @@ async function kirim(){
     $('#doneNo').textContent = res.noReg;
     $('#formArea').style.display = 'none'; $('#doneArea').style.display = '';
     $('#s_no').value = res.noReg; $('#s_nik').value = data.nik;
+    $('#s_nama').value = data.nama; $('#s_tgl').value = data.tglLahir;
     if(WA_GROUP_URL){ $('#waLink').href = WA_GROUP_URL; $('#waBox').style.display = ''; }
   }catch(e){ showAlert('#fErr', e.message || String(e)); }
   clearInterval(tm); btn.disabled = false; btn.textContent = TEST ? 'Uji Kirim (tidak disimpan)' : 'Kirim Pendaftaran';
@@ -829,17 +843,27 @@ function resetForm(){
 }
 
 /* ===== CEK STATUS ===== */
+let CEK_MODE = 'nama';
+function setCekMode(m){
+  CEK_MODE = m;
+  $('#stTabNama').classList.toggle('on', m === 'nama');
+  $('#stTabNo').classList.toggle('on', m === 'no');
+  $('#stGrpNama').style.display = m === 'nama' ? 'grid' : 'none';
+  $('#stGrpNo').style.display = m === 'no' ? 'grid' : 'none';
+  showAlert('#sErr','');
+}
 async function cek(){
   const btn = $('#btnCek'); btn.disabled = true; btn.innerHTML = '<span class="loader"></span>Memeriksa...';
   showAlert('#sErr',''); $('#sRes').style.display = 'none';
   try{
-    const r = await call('cekStatus', $('#s_no').value, $('#s_nik').value);
+    const r = CEK_MODE === 'nama'
+      ? await call('cekStatusNama', $('#s_nama').value, $('#s_tgl').value)
+      : await call('cekStatus', $('#s_no').value, $('#s_nik').value);
     CEK = Object.assign({}, r, {waktu: fmtWaktu(r.tanggal)});
-    const terverifikasi = ['Terverifikasi','Lulus','Tidak Lulus','Menunggu Pengumuman'].includes(r.status);
-    $('#btnBukti').disabled = !terverifikasi;
-    $('#bktHint').textContent = terverifikasi ? '' : (r.status === 'Perlu Perbaikan'
-      ? 'Bukti dapat diunduh setelah data diperbaiki dan diverifikasi admin.'
-      : 'Tombol aktif setelah data Anda diverifikasi oleh admin.');
+    $('#btnBukti').disabled = false;
+    $('#bktHint').textContent = r.status === 'Perlu Perbaikan'
+      ? 'Perhatikan catatan perbaikan dari panitia. Bukti pendaftaran tetap dapat diunduh.'
+      : 'Cetak atau simpan bukti ini untuk dibawa saat penyerahan berkas ke madrasah.';
     $('#sResList').innerHTML =
       `<dt>No. Pendaftaran</dt><dd>${esc(r.noReg)}</dd><dt>Nama</dt><dd>${esc(r.nama)}</dd>`+
       `<dt>Jalur</dt><dd>${esc(r.jalur)}</dd><dt>Tanggal Daftar</dt><dd>${esc(r.tanggal)}</dd>`+
