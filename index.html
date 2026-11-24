@@ -390,7 +390,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
         <div class="noreg" id="doneNo"></div>
         <p style="color:var(--muted);font-size:14px;line-height:1.6">Simpan nomor pendaftaran ini. Gunakan bersama NIK untuk <b>Cek Status</b>.<br>Panitia akan memverifikasi data dan berkas Anda.</p>
         <div id="waBox" style="display:none;margin:16px auto 0;max-width:420px;padding:16px;border:1px solid #b5e3c1;background:#eef8f1;border-radius:12px"><b style="display:block;margin-bottom:6px">Gabung Grup WhatsApp SPMB 2027/2028</b><p style="color:var(--muted);font-size:13px;line-height:1.5;margin-bottom:12px">Info terbaru dari panitia akan disampaikan lewat grup ini.</p><a class="btn btn-p" id="waLink" target="_blank" rel="noopener" style="display:inline-block;text-decoration:none;background:#25D366;box-shadow:none">Gabung Grup WhatsApp</a></div>
-        <div class="cta" style="justify-content:center"><button class="btn btn-p" onclick="cetakBukti()">⬇ Unduh Bukti Pendaftaran</button><button class="btn btn-s" onclick="go('status')">Cek Status</button><button class="btn btn-s" onclick="resetForm();go('beranda')">Ke Beranda</button></div>
+        <div class="cta" style="justify-content:center"><button class="btn btn-p" onclick="cetakBukti(null, this)">⬇ Unduh Bukti Pendaftaran</button><button class="btn btn-s" onclick="go('status')">Cek Status</button><button class="btn btn-s" onclick="resetForm();go('beranda')">Ke Beranda</button></div>
       </div>
     </div>
   </div>
@@ -420,7 +420,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
       <div id="sRes" style="display:none;margin-top:22px;padding-top:20px;border-top:1px solid #eef1f6">
         <div class="review"><dl id="sResList"></dl></div>
         <div style="text-align:center;margin-top:18px">
-          <button class="btn btn-p" id="btnBukti" onclick="cetakBukti(CEK)">⬇ Unduh Bukti Pendaftaran</button>
+          <button class="btn btn-p" id="btnBukti" onclick="cetakBukti(CEK, this)">⬇ Unduh Bukti Pendaftaran</button>
           <p id="bktHint" style="font-size:13px;color:var(--muted);margin-top:10px;line-height:1.5"></p>
         </div>
       </div>
@@ -761,11 +761,20 @@ const fmtWaktu = s => {
   const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/.exec(String(s || ''));
   return m ? `${Number(m[3])} ${BLN[Number(m[2])-1]} ${m[1]}, ${m[4]}.${m[5]} WIB` : String(s || '-');
 };
-function cetakBukti(src){
-  src = src || BUKTI;
-  if(!src) return;
-  const w = window.open('', '_blank');
-  if(!w){ tampilNotif({type:'warn', title:'Pop-up Diblokir', msg:'Izinkan pop-up untuk situs ini di browser Anda, lalu klik tombol lagi.'}); return; }
+let _pdfLib = null;
+function loadPdfLib(){
+  if(window.html2pdf) return Promise.resolve();
+  if(_pdfLib) return _pdfLib;
+  _pdfLib = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    s.onload = () => res();
+    s.onerror = () => { _pdfLib = null; rej(new Error('Gagal memuat pembuat PDF.')); };
+    document.head.appendChild(s);
+  });
+  return _pdfLib;
+}
+function buktiMarkup(src){
   const logo = document.querySelector('.logo-img');
   const grp = (t, rows) => `<tr><td colspan="2" class="sec">${esc(t)}</td></tr>` + rows.filter(r => r[1]).map(r => `<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('');
   const baris = grp('DATA CALON SISWA', rowsSiswa(src)) + grp('DATA AYAH', rowsOrtu(src.ayah)) + grp('DATA IBU', rowsOrtu(src.ibu))
@@ -773,33 +782,31 @@ function cetakBukti(src){
   const waktu = src.waktu;
   const status = src.status || 'Menunggu Verifikasi';
   const catatan = src.catatan ? `<tr><td class="k">Catatan</td><td>${esc(src.catatan)}</td></tr>` : '';
-  const wm = src.ujiCoba ? '<div class="wm">UJI COBA<br><span>DATA TIDAK DISIMPAN</span></div>' : '';
-  w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bukti Pendaftaran ${esc(src.noReg)}${src.ujiCoba ? ' (UJI COBA)' : ''}</title>
-<style>
-@page{size:A4;margin:12mm 14mm 14mm}
-*{box-sizing:border-box}
-body{font-family:Arial,Helvetica,sans-serif;color:#000;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.wm{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:52px;font-weight:800;letter-spacing:5px;line-height:1.15;color:rgba(185,28,28,.16);border:6px solid rgba(185,28,28,.18);padding:14px 34px;border-radius:16px;white-space:nowrap;pointer-events:none;z-index:999;text-align:center}
-.wm span{display:block;font-size:18px;letter-spacing:3px;margin-top:4px}
-.kop{display:flex;align-items:center;gap:14px;padding-bottom:6px;border-bottom:4px double #000}
-.kop img{width:80px;height:80px;object-fit:contain;flex:none}
-.kop .l{flex:1}.kop .n{font-size:21px;font-weight:700;line-height:1.05}.kop .t{font-size:19px;font-weight:700;letter-spacing:1px}.kop .a{font-size:13px;font-weight:700}
-.kop .r{text-align:right;font-size:11px;font-style:italic;line-height:1.35;font-family:Georgia,'Times New Roman',serif}
-h1{text-align:center;font-size:20px;margin:16px 0 4px}
-.sub{text-align:center;font-size:13px;margin-bottom:12px}
-.no{border:2px solid #0a5c36;border-radius:8px;text-align:center;padding:8px;margin:0 auto 12px;width:60%}
-.no small{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase}
-.no b{font-size:24px;letter-spacing:2px;color:#0a5c36}
-table{width:100%;border-collapse:collapse}
-td{border:1px solid #000;padding:4px 8px;vertical-align:top;word-break:break-word}
-td.k{width:34%;background:#e4f3e8;font-weight:700}
-td.sec{background:#0a5c36;color:#fff;font-weight:700;letter-spacing:.5px}
-tr{page-break-inside:avoid}
-.st{margin-top:12px;padding:10px;border:1px dashed #000;font-size:12px;line-height:1.6}
-.ttd{margin-top:24px;display:flex;justify-content:flex-end;font-size:13px;page-break-inside:avoid}
-.ttd div{width:45%;text-align:center;line-height:1.7}.ttd .sp{height:56px}
-@media(max-width:600px){.kop{flex-wrap:wrap}.kop .r{text-align:left;width:100%}.no{width:100%}}
-</style></head><body onload="setTimeout(function(){window.print()},300)">
+  const wm = src.ujiCoba ? '<div class="wm">UJI COBA<span>DATA TIDAK DISIMPAN</span></div>' : '';
+  return `<style>
+.pdf-doc{position:relative;font-family:Arial,Helvetica,sans-serif;color:#000;font-size:11.5px;line-height:1.35;background:#fff;padding:10mm 12mm;width:210mm;box-sizing:border-box}
+.pdf-doc *{box-sizing:border-box}
+.pdf-doc .wm{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:48px;font-weight:800;letter-spacing:5px;line-height:1.15;color:rgba(185,28,28,.16);border:6px solid rgba(185,28,28,.18);padding:14px 34px;border-radius:16px;white-space:nowrap;pointer-events:none;z-index:10;text-align:center}
+.pdf-doc .wm span{display:block;font-size:17px;letter-spacing:3px;margin-top:4px}
+.pdf-doc .kop{display:flex;align-items:center;gap:14px;padding-bottom:6px;border-bottom:4px double #000}
+.pdf-doc .kop img{width:76px;height:76px;object-fit:contain;flex:none}
+.pdf-doc .kop .l{flex:1}.pdf-doc .kop .n{font-size:20px;font-weight:700;line-height:1.05}.pdf-doc .kop .t{font-size:18px;font-weight:700;letter-spacing:1px}.pdf-doc .kop .a{font-size:12.5px;font-weight:700}
+.pdf-doc .kop .r{text-align:right;font-size:10.5px;font-style:italic;line-height:1.35;font-family:Georgia,'Times New Roman',serif}
+.pdf-doc h1{text-align:center;font-size:18px;margin:12px 0 3px;color:#000}
+.pdf-doc .sub{text-align:center;font-size:12px;margin-bottom:10px}
+.pdf-doc .no{border:2px solid #0a5c36;border-radius:8px;text-align:center;padding:6px;margin:0 auto 10px;width:58%}
+.pdf-doc .no small{display:block;font-size:10.5px;letter-spacing:1px;text-transform:uppercase}
+.pdf-doc .no b{font-size:22px;letter-spacing:2px;color:#0a5c36}
+.pdf-doc table{width:100%;border-collapse:collapse}
+.pdf-doc td{border:1px solid #000;padding:3.5px 7px;vertical-align:top;word-break:break-word;white-space:normal}
+.pdf-doc td.k{width:34%;background:#e4f3e8;font-weight:700}
+.pdf-doc td.sec{background:#0a5c36;color:#fff;font-weight:700;letter-spacing:.5px}
+.pdf-doc tr{page-break-inside:avoid}
+.pdf-doc .st{margin-top:10px;padding:8px 10px;border:1px dashed #000;font-size:11px;line-height:1.5;display:block;border-radius:0;background:transparent;color:#000;font-weight:400}
+.pdf-doc .ttd{margin-top:18px;display:flex;justify-content:flex-end;font-size:12px;page-break-inside:avoid}
+.pdf-doc .ttd div{width:45%;text-align:center;line-height:1.6}.pdf-doc .ttd .sp{height:48px}
+</style>
+<div class="pdf-doc">
 ${wm}
 <div class="kop">${logo ? `<img src="${logo.src}" alt="">` : ''}
  <div class="l"><div class="n">MADRASAH IBTIDA'IYAH NURUL ISLAM</div><div class="t">TEMPEH TENGAH</div><div class="a">Terakreditasi B</div></div>
@@ -808,10 +815,37 @@ ${wm}
 <div class="sub">Telah terdaftar pada ${esc(waktu)}</div>
 <div class="no"><small>Nomor Pendaftaran</small><b>${esc(src.noReg)}</b></div>
 <table><tbody>${baris}<tr><td class="k">Status</td><td><b>${esc(status)}</b></td></tr>${catatan}</tbody></table>
-<div class="st"><b>Catatan:</b> Simpan bukti ini. Gunakan Nomor Pendaftaran dan NIK untuk Cek Status di situs SPMB. Data akan diverifikasi oleh panitia. Dokumen ini bukan bukti kelulusan.</div>
+<div class="st"><b>Catatan:</b> Simpan bukti ini dan bawa saat penyerahan berkas ke madrasah. Gunakan Nama &amp; Tanggal Lahir atau Nomor Pendaftaran &amp; NIK untuk Cek Status di situs SPMB. Dokumen ini bukan bukti kelulusan.</div>
 <div class="ttd"><div>Panitia SPMB<div class="sp"></div><b>(................................)</b></div></div>
-</body></html>`);
-  w.document.close();
+</div>`;
+}
+async function cetakBukti(src, btn){
+  src = src || BUKTI;
+  if(!src) return;
+  const orig = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.innerHTML = '<span class="loader"></span>Menyiapkan PDF...'; }
+  const html = buktiMarkup(src);
+  const namaFile = 'Bukti-Pendaftaran-' + String(src.noReg || 'SPMB').replace(/[^A-Za-z0-9_-]/g, '') + (src.ujiCoba ? '-UJI-COBA' : '') + '.pdf';
+  try{
+    await loadPdfLib();
+    await window.html2pdf().set({
+      margin: 0,
+      filename: namaFile,
+      image: { type: 'jpeg', quality: 0.96 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+    }).from(html).save();
+  }catch(_){
+    const w = window.open('', '_blank');
+    if(!w){ tampilNotif({type:'warn', title:'Pop-up Diblokir', msg:'Izinkan pop-up untuk situs ini di browser Anda, lalu klik tombol lagi.'}); }
+    else {
+      w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${esc(namaFile)}</title><style>@page{size:A4;margin:0}body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body onload="setTimeout(function(){window.print()},300)">${html}</body></html>`);
+      w.document.close();
+    }
+  }finally{
+    if(btn){ btn.disabled = false; btn.innerHTML = orig; }
+  }
 }
 async function kirim(){
   const btn = $('#btnKirim'); btn.disabled = true; btn.innerHTML = '<span class="loader"></span>Mengirim...';
@@ -831,7 +865,7 @@ async function kirim(){
         note: 'Mode uji coba — data tidak disimpan',
         btn: 'Oke',
         btn2: '⬇ Unduh Bukti (Uji Coba)',
-        onBtn2: () => cetakBukti(BUKTI)
+        onBtn2: () => cetakBukti(BUKTI, $('#nBtn2'))
       });
       clearInterval(tm); btn.disabled = false; setUji(true); return;
     }
