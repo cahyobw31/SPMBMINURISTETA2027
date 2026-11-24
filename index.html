@@ -157,8 +157,8 @@ tr.cl{cursor:pointer}tr.cl:hover td{background:#f6fbf8}
 .notif-meta span{color:var(--muted)}
 .notif-meta b{color:var(--navy);font-weight:700;text-align:right;word-break:break-word}
 .notif-note{margin-top:12px;font-size:12px;color:var(--muted);background:#f4f7f5;display:inline-block;padding:5px 12px;border-radius:999px}
-.notif-act{margin-top:20px;display:flex;gap:10px;justify-content:center}
-.notif-act .btn{min-width:120px;padding:12px 24px}
+.notif-act{margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.notif-act .btn{min-width:120px;padding:12px 20px}
 .files a{display:inline-block;margin:4px 8px 4px 0;padding:6px 12px;background:#eef8f1;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none}
 
 footer{background:#053d25;color:#a9c9b6;padding:28px 20px;font-size:13px;text-align:center}
@@ -520,7 +520,7 @@ input:disabled,select:disabled,textarea:disabled{background:#f1f4f2;color:#8a978
     <p class="notif-msg" id="nMsg"></p>
     <div class="notif-meta" id="nMeta" style="display:none"></div>
     <div id="nNoteWrap" style="display:none"><span class="notif-note" id="nNote"></span></div>
-    <div class="notif-act"><button class="btn btn-p" id="nBtn" onclick="tutupNotif()">Mengerti</button></div>
+    <div class="notif-act"><button class="btn btn-s" id="nBtn2" style="display:none"></button><button class="btn btn-p" id="nBtn" onclick="tutupNotif()">Mengerti</button></div>
   </div>
 </div>
 
@@ -572,7 +572,7 @@ const NOTIF_IC = {
   warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4m0 4h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4m0-4h.01"/></svg>'
 };
-function tampilNotif({type='info', title='', msg='', meta=null, note='', btn='Mengerti'}){
+function tampilNotif({type='info', title='', msg='', meta=null, note='', btn='Mengerti', btn2='', onBtn2=null}){
   const ic = $('#nIc'); ic.className = 'notif-ic ' + type; ic.innerHTML = NOTIF_IC[type] || NOTIF_IC.info;
   $('#nTitle').textContent = title;
   $('#nMsg').textContent = msg;
@@ -583,6 +583,9 @@ function tampilNotif({type='info', title='', msg='', meta=null, note='', btn='Me
   }else{ m.innerHTML = ''; m.style.display = 'none'; }
   $('#nNote').textContent = note || '';
   $('#nNoteWrap').style.display = note ? '' : 'none';
+  const b2 = $('#nBtn2');
+  if(btn2 && onBtn2){ b2.textContent = btn2; b2.style.display = ''; b2.onclick = onBtn2; }
+  else { b2.style.display = 'none'; b2.onclick = null; }
   $('#nBtn').textContent = btn;
   $('#notifModal').classList.add('show');
   $('#nBtn').focus();
@@ -770,11 +773,14 @@ function cetakBukti(src){
   const waktu = src.waktu;
   const status = src.status || 'Menunggu Verifikasi';
   const catatan = src.catatan ? `<tr><td class="k">Catatan</td><td>${esc(src.catatan)}</td></tr>` : '';
-  w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bukti Pendaftaran ${esc(src.noReg)}</title>
+  const wm = src.ujiCoba ? '<div class="wm">UJI COBA<br><span>DATA TIDAK DISIMPAN</span></div>' : '';
+  w.document.write(`<!DOCTYPE html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Bukti Pendaftaran ${esc(src.noReg)}${src.ujiCoba ? ' (UJI COBA)' : ''}</title>
 <style>
 @page{size:A4;margin:12mm 14mm 14mm}
 *{box-sizing:border-box}
 body{font-family:Arial,Helvetica,sans-serif;color:#000;font-size:12px;margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.wm{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:52px;font-weight:800;letter-spacing:5px;line-height:1.15;color:rgba(185,28,28,.16);border:6px solid rgba(185,28,28,.18);padding:14px 34px;border-radius:16px;white-space:nowrap;pointer-events:none;z-index:999;text-align:center}
+.wm span{display:block;font-size:18px;letter-spacing:3px;margin-top:4px}
 .kop{display:flex;align-items:center;gap:14px;padding-bottom:6px;border-bottom:4px double #000}
 .kop img{width:80px;height:80px;object-fit:contain;flex:none}
 .kop .l{flex:1}.kop .n{font-size:21px;font-weight:700;line-height:1.05}.kop .t{font-size:19px;font-weight:700;letter-spacing:1px}.kop .a{font-size:13px;font-weight:700}
@@ -794,6 +800,7 @@ tr{page-break-inside:avoid}
 .ttd div{width:45%;text-align:center;line-height:1.7}.ttd .sp{height:56px}
 @media(max-width:600px){.kop{flex-wrap:wrap}.kop .r{text-align:left;width:100%}.no{width:100%}}
 </style></head><body onload="setTimeout(function(){window.print()},300)">
+${wm}
 <div class="kop">${logo ? `<img src="${logo.src}" alt="">` : ''}
  <div class="l"><div class="n">MADRASAH IBTIDA'IYAH NURUL ISLAM</div><div class="t">TEMPEH TENGAH</div><div class="a">Terakreditasi B</div></div>
  <div class="r">Jl. Ir. Soekarno No.104 Tempeh<br>email : minuristempeh@gmail.com<br>NSM : 111235080079<br>NPSN : 60715429</div></div>
@@ -815,13 +822,16 @@ async function kirim(){
     if(TEST){
       const u = await call('adminUjiDaftar', TOKEN, data);
       showAlert('#fErr','');
+      BUKTI = Object.assign({}, data, {noReg: u.noRegBerikutnya, status: 'Uji Coba (Tidak Disimpan)', waktu: fmtWaktu(new Date().toLocaleString('sv-SE', {timeZone: 'Asia/Jakarta'})), ujiCoba: true});
       tampilNotif({
         type: 'ok',
         title: 'Uji Coba Berhasil',
         msg: 'Semua data pendaftaran sudah lengkap dan valid.',
         meta: [['Nama Calon Siswa', u.nama], ['No. Pendaftaran Berikutnya', u.noRegBerikutnya]],
         note: 'Mode uji coba — data tidak disimpan',
-        btn: 'Oke'
+        btn: 'Oke',
+        btn2: '⬇ Unduh Bukti (Uji Coba)',
+        onBtn2: () => cetakBukti(BUKTI)
       });
       clearInterval(tm); btn.disabled = false; setUji(true); return;
     }
