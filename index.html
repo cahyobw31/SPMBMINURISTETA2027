@@ -826,13 +826,15 @@ async function cetakBukti(src, btn){
   if(btn){ btn.disabled = true; btn.innerHTML = '<span class="loader"></span>Menyiapkan PDF...'; }
   const html = buktiMarkup(src);
   const namaFile = 'Bukti-Pendaftaran-' + String(src.noReg || 'SPMB').replace(/[^A-Za-z0-9_-]/g, '') + (src.ujiCoba ? '-UJI-COBA' : '') + '.pdf';
+  const sy = window.scrollY;
   try{
     await loadPdfLib();
+    window.scrollTo(0, 0);
     await window.html2pdf().set({
       margin: 0,
       filename: namaFile,
       image: { type: 'jpeg', quality: 0.96 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, windowWidth: 794 },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
     }).from(html).save();
@@ -844,6 +846,7 @@ async function cetakBukti(src, btn){
       w.document.close();
     }
   }finally{
+    window.scrollTo(0, sy);
     if(btn){ btn.disabled = false; btn.innerHTML = orig; }
   }
 }
